@@ -243,7 +243,7 @@ class VoiceTranscriptor {
         while (buffer.length > 0) {
             try {
                 let chunkHeader = new TextDecoder().decode(buffer.subarray(0, 3));
-                if (chunkHeader !== 'TIM' && chunkHeader !== 'REQ' && chunkHeader !== 'ANS' && chunkHeader !== 'PCM') {
+                if (['TIM', 'SPK', 'REQ', 'ANS', 'PCM'].indexOf(chunkHeader) === -1) {
                     break;
                 }
 
@@ -260,7 +260,7 @@ class VoiceTranscriptor {
                         buffer = buffer.subarray(7 + chunkSize);
                     }
 
-                    if (chunkHeader === 'REQ') {
+                    if (chunkHeader === 'REQ' || chunkHeader === 'SPK') {
                         chunkContent = new TextDecoder().decode(chunkContent);
                         decodedData[chunkHeader] = chunkContent;
                     } else if(chunkHeader === 'ANS') {
