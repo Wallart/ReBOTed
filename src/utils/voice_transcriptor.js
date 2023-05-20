@@ -1,3 +1,4 @@
+const { Agent } = require('https');
 const axios = require('axios');
 const prism = require('prism-media');
 const { Readable } = require('stream');
@@ -7,15 +8,24 @@ const { MinPriorityQueue } = require('@datastructures-js/priority-queue');
 const { createAudioPlayer, NoSubscriberBehavior, createAudioResource } = require('@discordjs/voice');
 const { joinVoiceChannel, getVoiceConnection, AudioPlayerStatus, StreamType, VoiceConnectionStatus, EndBehaviorType} = require('@discordjs/voice');
 const { HYPERION_SERVER } = require('../../config.json');
+const { readFileSync} = require('fs');
 
 class VoiceTranscriptor {
 
     constructor(stateCallback) {
         let hostname = HYPERION_SERVER['hostname']
         let port = HYPERION_SERVER['port']
-        this.talk_endpoint = `http://${hostname}:${port}/audio`;
-        this.chat_endpoint = `http://${hostname}:${port}/chat`;
-        this.state_endpoint = `http://${hostname}:${port}/state`;
+        this.talk_endpoint = `https://${hostname}:${port}/audio`;
+        this.chat_endpoint = `https://${hostname}:${port}/chat`;
+        this.state_endpoint = `https://${hostname}:${port}/state`;
+
+        // axios.defaults.httpsAgent = new Agent({
+        //   ca: readFileSync('cert.pem'),
+        //   cert: readFileSync('cert.pem'),
+        // });
+        // TODO Would be better to do a strict cert check.
+        const httpsOptions = { rejectUnauthorized: false };
+        axios.defaults.httpsAgent = new Agent(httpsOptions);
         this.channels = 1;
         this.sampleRate = 16000;
 
@@ -25,12 +35,13 @@ class VoiceTranscriptor {
         this.player = this.createAudioPlayer();
         this.sid = null;
 
-        this.socket = io(`ws://${hostname}:${port}`);
+        this.socket = io(`wss://${hostname}:${port}`, httpsOptions);
         this.socket.on('connect', (params) => {
             this.sid = this.socket.id;
             console.log(this.sid);
         });
 
+        this.socket.on('error', console.error);
         this.socket.on('interrupt', (timestamp) => {
             this.interrupt_stamp = timestamp;
             this.audioQueue.clear();
