@@ -3,6 +3,8 @@ const path = require('node:path');
 const openai = require('../openai/openai');
 const VoiceTranscriptor = require('./voice_transcriptor');
 const { Client, GatewayIntentBits, Collection, Partials, ActivityType } = require('discord.js');
+const { v4: uuidv4 } = require('uuid');
+const { BLA_BLA_CHANNEL } = require('../../config.json');
 
 class Discord {
 
@@ -30,7 +32,12 @@ class Discord {
             // With the key as the command name and the value as the exported module
             this.client.commands.set(command.data.name, command);
         }
-        this.voice = new VoiceTranscriptor((state) => this.stateChanged(state));
+        this.voice = new VoiceTranscriptor((state) => this.stateChanged(state), (img) => this.sendImage(img));
+    }
+
+    sendImage(img) {
+        const payload = { files: [{ attachment: img, name: `${uuidv4()}.jpg` }] };
+        this.getChannelById(BLA_BLA_CHANNEL).send(payload);
     }
 
     stateChanged(state) {

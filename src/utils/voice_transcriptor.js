@@ -12,7 +12,7 @@ const { readFileSync} = require('fs');
 
 class VoiceTranscriptor {
 
-    constructor(stateCallback) {
+    constructor(stateCallback, imgCallback) {
         let hostname = HYPERION_SERVER['hostname']
         let port = HYPERION_SERVER['port']
         this.talk_endpoint = `https://${hostname}:${port}/audio`;
@@ -55,6 +55,9 @@ class VoiceTranscriptor {
         this.currentState = 'available';
         this.stateChangeCallback = () => {
             stateCallback(this.currentState);
+        };
+        this.imgCallback = (img) => {
+            imgCallback(img);
         };
     }
 
@@ -117,15 +120,9 @@ class VoiceTranscriptor {
 
     onSpokenResponse(stream) {
         let buffer = Buffer.alloc(0);
-        let decoded = {};
         stream.on('data', (data) => {
             buffer = Buffer.concat([buffer, data], buffer.length + data.length);
-            try {
-                buffer = this.frameDecode(buffer, decoded);
-            } catch (err) {
-                console.error(err);
-                console.error(buffer);
-            }
+            buffer = this.frameDecode(buffer);
         });
         stream.on('error', (e) => {
             console.log(e);
@@ -250,27 +247,34 @@ class VoiceTranscriptor {
         return resource;
     }
 
-    frameDecode(buffer, decodedData) {
+    frameDecode(buffer) {
+        let cursor = 0;
+        let decodedData = {};
+        const validHeaders = ['TIM', 'SPK', 'REQ', 'IDX', 'ANS', 'PCM', 'IMG'];
         while (buffer.length > 0) {
             try {
-                let chunkHeader = new TextDecoder().decode(buffer.subarray(0, 3));
-                if (['TIM', 'SPK', 'REQ', 'ANS', 'PCM'].indexOf(chunkHeader) === -1) {
+                let chunkHeader = new TextDecoder().decode(buffer.subarray(cursor, cursor + 3));
+                cursor += 3;
+                if (validHeaders.indexOf(chunkHeader) === -1) {
+                    console.error('Invalid header');
                     break;
                 }
 
                 if (chunkHeader === 'TIM') {
-                    decodedData['TIM'] = buffer.subarray(3, 11).readDoubleLE();
-                    buffer = buffer.subarray(11);
+                    decodedData['TIM'] = buffer.subarray(cursor, cursor + 8).readDoubleLE();
+                    cursor += 8;
                 } else {
-                    let chunkSize = buffer.readInt32BE(3);
-                    let chunkContent = buffer.subarray(7, 7 + chunkSize);
+                    let chunkSize = buffer.subarray(cursor).readInt32BE(0);
+                    cursor += 4;
+                    let chunkContent = buffer.subarray(cursor, cursor + chunkSize);
 
                     if (chunkContent.length < chunkSize) {
+                        console.warn('Date frame is not complete');
                         break;
-                    } else {
-                        buffer = buffer.subarray(7 + chunkSize);
                     }
 
+                    // buffer = buffer.subarray(7 + chunkSize);
+                    cursor += chunkSize;
                     if (chunkHeader === 'REQ' || chunkHeader === 'SPK') {
                         chunkContent = new TextDecoder().decode(chunkContent);
                         decodedData[chunkHeader] = chunkContent;
@@ -278,13 +282,20 @@ class VoiceTranscriptor {
                         decodedData['IDX'] = chunkContent.readInt8(0);
                         chunkContent = new TextDecoder().decode(chunkContent.subarray(1));
                         decodedData[chunkHeader] = chunkContent;
-                    } else if (chunkHeader === 'PCM') {
-                        decodedData['PCM'] = chunkContent;
+                    } else if (chunkHeader === 'PCM' || chunkHeader === 'IMG') {
+                        decodedData[chunkHeader] = chunkContent;
+                    }
+
+                    if (validHeaders.toString() === Object.keys(decodedData).toString()) {
                         this.handleDecoded(decodedData);
+                        // Remove consumed data
                         decodedData = {};
+                        buffer = buffer.subarray(cursor);
+                        cursor = 0;
                     }
                 }
             } catch (e) {
+                console.error(`Error occurred during frameDecode : ${e}`);
                 break;
             }
         }
@@ -297,15 +308,22 @@ class VoiceTranscriptor {
         const req = data['REQ'];
         const ans = data['ANS'];
         const pcm = data['PCM'];
+        const img = data['IMG'];
         console.log(`\x1b[33m ${req} \x1b[0m`);
         console.log(`\x1b[36m ${ans} \x1b[0m`);
 
-        const wavData = wavConverter.encodeWav(pcm, {
-            byteRate: 16,
-            numChannels: 1,
-            sampleRate: 24000
-        });
-        this.play(time, idx, Readable.from(wavData));
+        if (pcm.length > 0) {
+            const wavData = wavConverter.encodeWav(pcm, {
+                byteRate: 16,
+                numChannels: 1,
+                sampleRate: 24000
+            });
+            this.play(time, idx, Readable.from(wavData));
+        }
+
+        if (img.length > 0) {
+            this.imgCallback(img);
+        }
     }
 }
 
