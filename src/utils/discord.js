@@ -43,7 +43,7 @@ class Discord {
     stateChanged(state) {
         // invisible
         let status = 'online';
-        let activityName = 'vos malheurs 😤';
+        let activityName = 'vos conneries 😤';
         let activityType = ActivityType.Listening;
         if (state === 'sleeping') {
             status = 'idle';

@@ -1,14 +1,14 @@
-const { Agent } = require('https');
 const axios = require('axios');
-const prism = require('prism-media');
+const { Agent } = require('https');
 const { Readable } = require('stream');
+const { readFileSync} = require('fs');
+const prism = require('prism-media');
 const { io } = require('socket.io-client');
 const wavConverter = require('wav-converter');
 const { MinPriorityQueue } = require('@datastructures-js/priority-queue');
+const { HYPERION_SERVER, HYPERION_CLIENT_VERSION } = require('../../config.json');
 const { createAudioPlayer, NoSubscriberBehavior, createAudioResource } = require('@discordjs/voice');
 const { joinVoiceChannel, getVoiceConnection, AudioPlayerStatus, StreamType, VoiceConnectionStatus, EndBehaviorType} = require('@discordjs/voice');
-const { HYPERION_SERVER } = require('../../config.json');
-const { readFileSync} = require('fs');
 
 class VoiceTranscriptor {
 
@@ -92,6 +92,7 @@ class VoiceTranscriptor {
             responseType: 'stream',
             headers: {
                 'SID': this.sid,
+                'version': HYPERION_CLIENT_VERSION,
                 'Content-Type': 'application/octet-stream'
             }
         };
@@ -150,7 +151,8 @@ class VoiceTranscriptor {
     // Other
 
     checkState(availCallback, errorCallback) {
-        axios.get(this.state_endpoint)
+        const config = { headers: {'version': HYPERION_CLIENT_VERSION} };
+        axios.get(this.state_endpoint, config)
         .then(response => {
             if (this.currentState === 'error') {
                 this.currentState = 'available';
@@ -172,7 +174,8 @@ class VoiceTranscriptor {
         const config = {
             responseType: 'stream',
             headers: {
-                'SID': this.sid
+                'SID': this.sid,
+                'version': HYPERION_CLIENT_VERSION
             }
         };
         axios.post(this.chat_endpoint, payload, config)
