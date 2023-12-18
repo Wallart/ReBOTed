@@ -1,12 +1,12 @@
 const axios = require('axios');
 const { Agent } = require('https');
 const { Readable } = require('stream');
-const { readFileSync} = require('fs');
+const { encrypt } = require('./crypto');
 const prism = require('prism-media');
 const { io } = require('socket.io-client');
 const wavConverter = require('wav-converter');
 const { MinPriorityQueue } = require('@datastructures-js/priority-queue');
-const { HYPERION_SERVER, HYPERION_CLIENT_VERSION } = require('../../config.json');
+const { HYPERION_SERVER, HYPERION_CLIENT_VERSION, RAW_SECRET } = require('../../config.json');
 const { createAudioPlayer, NoSubscriberBehavior, createAudioResource } = require('@discordjs/voice');
 const { joinVoiceChannel, getVoiceConnection, AudioPlayerStatus, StreamType, VoiceConnectionStatus, EndBehaviorType} = require('@discordjs/voice');
 
@@ -34,6 +34,7 @@ class VoiceTranscriptor {
         this.receiver = null;
         this.player = this.createAudioPlayer();
         this.sid = null;
+        this.secret = encrypt('public_key.pem', RAW_SECRET);
 
         this.socket = io(`wss://${hostname}:${port}`, httpsOptions);
         this.socket.on('connect', (params) => {
@@ -92,6 +93,7 @@ class VoiceTranscriptor {
             responseType: 'stream',
             headers: {
                 'SID': this.sid,
+                'secret': this.secret,
                 'version': HYPERION_CLIENT_VERSION,
                 'Content-Type': 'application/octet-stream'
             }
@@ -151,7 +153,12 @@ class VoiceTranscriptor {
     // Other
 
     checkState(availCallback, errorCallback) {
-        const config = { headers: {'version': HYPERION_CLIENT_VERSION} };
+        const config = {
+            headers: {
+                'secret': this.secret,
+                'version': HYPERION_CLIENT_VERSION
+            }
+        };
         axios.get(this.state_endpoint, config)
         .then(response => {
             if (this.currentState === 'error') {
@@ -175,6 +182,7 @@ class VoiceTranscriptor {
             responseType: 'stream',
             headers: {
                 'SID': this.sid,
+                'secret': this.secret,
                 'version': HYPERION_CLIENT_VERSION
             }
         };
