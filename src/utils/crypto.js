@@ -6,7 +6,7 @@ function encrypt(publicKeyPath, data) {
     const buffer = Buffer.from(data, 'utf8');
     const encrypted = crypto.publicEncrypt({
         key: publicKey,
-        oaepHash: 'sha-256',
+        oaepHash: 'sha256',
         padding: crypto.constants.RSA_PKCS1_OAEP_PADDING
     }, buffer);
 
